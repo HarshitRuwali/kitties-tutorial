@@ -30,7 +30,7 @@ pub mod pallet {
 	}
 
 	// ACTION #2: Enum declaration for Gender.
-	#[derive(Encode, Decode, Debug, Clone, PartialEq)]
+	#[derive(Encode, Decode, Debug, Clone, PartialEq, TypeInfo)]
 	pub enum Gender {
 		Male,
 		Female,
@@ -68,6 +68,24 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		// TODO Part III
+		/// Handles arithemtic overflow when incrementing the Kitty counter.
+		KittyCntOverflow,
+		/// An account cannot own more Kitties than `MaxKittyCount`.
+		ExceedMaxKittyOwned,
+		/// Buyer cannot be the owner.
+		BuyerIsKittyOwner,
+		/// Cannot transfer a kitty to its owner.
+		TransferToSelf,
+		/// Handles checking whether the Kitty exists.
+		KittyNotExist,
+		/// Handles checking that the Kitty is owned by the account transferring, buying or setting a price for it.
+		NotKittyOwner,
+		/// Ensures the Kitty is for sale.
+		KittyNotForSale,
+		/// Ensures that the buying price is greater than the asking price.
+		KittyBidPriceTooLow,
+		/// Ensures that an account has enough funds to purchase a Kitty. 
+		NotEnoughBalance,
 	}
 
 	// Events.
@@ -76,6 +94,11 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// TODO Part III
+		// Success(T::Time, T::Day),
+		Created(T::AccountId, T::Hash),
+		PriceSet(T::AccountId, T::Hash, Option<BalanceOf<T>>),
+		Transferred(T::AccountId, T::AccountId, T::Hash),
+		Bought(T::AccountId, T::AccountId, T::Hash, BalanceOf<T>),
 	}
 
 	#[pallet::storage]
@@ -107,6 +130,21 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 
 		// TODO Part III: create_kitty
+		#[pallet::weight(100)]
+		pub fn create_kitty(origin: OriginFor<T>) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			let kitty_id = Self::mint(&sender, None, None)?;
+
+			// Logging to the console
+			log::info!("A kitty is born with ID: {:?}.", kitty_id);
+
+			// Deposit our "Created" event.
+			Self::deposit_event(Event::Created(sender, kitty_id));
+			
+			Ok(())
+		}
+
 
 		// TODO Part IV: set_price
 
@@ -142,6 +180,34 @@ pub mod pallet {
 		}
 
 		// TODO Part III: mint
+		// Helper to mint a Kitty.
+		pub fn mint(
+			owner: &T::AccountId,
+			dna: Option<[u8; 16]>,
+			gender: Option<Gender>,
+		) -> Result<T::Hash, Error<T>> {
+			let kitty = Kitty::<T> {
+				dna: dna.unwrap_or_else(Self::gen_dna),
+				price: None,
+				gender: gender.unwrap_or_else(Self::gen_gender),
+				owner: owner.clone(),
+			};
+		
+			let kitty_id = T::Hashing::hash_of(&kitty);
+		
+			// Performs this operation first as it may fail
+			let new_cnt = Self::all_kitties_count().checked_add(1)
+			.ok_or(<Error<T>>::KittyCntOverflow)?;
+		
+			// Performs this operation first because as it may fail
+			<KittiesOwned<T>>::try_mutate(&owner, |kitty_vec| {
+			kitty_vec.try_push(kitty_id)
+			}).map_err(|_| <Error<T>>::ExceedMaxKittyOwned)?;
+		
+			<Kitties<T>>::insert(kitty_id, kitty);
+			<KittyCnt<T>>::put(new_cnt);
+			Ok(kitty_id)
+		}
 
 		// TODO Part IV: transfer_kitty_to
 	}
