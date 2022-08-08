@@ -22,6 +22,7 @@ pub mod pallet {
 	type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 	#[derive(Clone, Encode, Decode, PartialEq, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
 	pub struct Kitty<T: Config> {
 		pub dna: [u8; 16],   
 		pub price: Option<BalanceOf<T>>,
@@ -44,7 +45,9 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	#[pallet::generate_store(trait Store)]
+	#[derive(TypeInfo)]
 	pub struct Pallet<T>(_);
 
 	/// Configure the pallet by specifying the parameters and types it depends on.
